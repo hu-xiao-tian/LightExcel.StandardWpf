@@ -4,7 +4,12 @@
 
 ## 运行这个项目
 
-在 Visual Studio 打开 `LightExcel.StandardWpf.csproj`，还原 NuGet 后启动。示例读取运行目录的 `data/corrugated.db`。点“加载数据库订单”，当前数据文件有多少就读取多少，最多 100 万行，表格展示 20 列。左键点列头排序，按住 Shift 点击可追加排序列，右键点列头筛选。表格底部显示查询状态和当前结果行数。
+1. 在 Visual Studio 打开 `LightExcel.StandardWpf.csproj`，还原 NuGet 并生成项目。
+2. 下载并解压 [基础示例库](https://github.com/hu-xiao-tian/LightExcel.StandardWpf/releases/download/test-data-corrugated-2m/corrugated.zip)，将 `corrugated.db` 放到 `LightExcel.StandardWpf.exe` 同级的 `data` 目录。如果目录不存在，先新建它。
+3. 如果要运行 200 万行压测，再下载并解压 [压测库](https://github.com/hu-xiao-tian/LightExcel.StandardWpf/releases/download/test-data-corrugated-2m/corrugated-2m.zip)，将 `corrugated-2m.db` 放到同一个 `data` 目录。
+4. 启动程序。
+
+点“加载数据库订单”，当前数据文件有多少就读取多少，最多 100 万行，表格展示 20 列。左键点列头排序，按住 Shift 点击可追加排序列，右键点列头筛选。表格底部显示查询状态和当前结果行数。
 
 项目目标是 .NET 10 WPF、Windows x64。项目内 `packages` 存放保护版 `LightExcel.Core` 与 `LightExcel.DataExchange` 1.9.97，`NuGet.Config` 配置本地源。新版本安装后若 IDE 使用旧缓存，可执行 Visual Studio 的“清理解决方案”，重新还原并生成。
 

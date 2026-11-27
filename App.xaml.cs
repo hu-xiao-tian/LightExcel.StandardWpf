@@ -26,7 +26,7 @@ public partial class App : Application
 
         if (!File.Exists(databasePath))
         {
-            MessageBox.Show($"找不到数据库：\n{databasePath}\n\n请先运行 LightExcel.CorrugatedDemo 的 --seed 生成。",
+            MessageBox.Show($"找不到数据库：\n{databasePath}\n\n请从 GitHub Releases 下载 corrugated.zip，解压后将 corrugated.db 放到上述位置。",
                 "数据库缺失", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
             return;

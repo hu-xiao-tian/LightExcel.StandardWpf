@@ -5,7 +5,6 @@
 *.suo
 
 /data/*
-!/data/corrugated.db
 
 /packages/*
 !/packages/LightExcel.Core.3.1.9.nupkg
