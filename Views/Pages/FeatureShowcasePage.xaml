@@ -1,0 +1,73 @@
+<UserControl x:Class="LightExcel.StandardWpf.Views.Pages.FeatureShowcasePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sheet="http://schemas.lightexcel.dev/wpf"
+             FontFamily="Microsoft YaHei UI, Segoe UI">
+    <UserControl.Resources>
+        <Style TargetType="Button" BasedOn="{StaticResource LightExcel.ButtonStyle}" />
+    </UserControl.Resources>
+    <DockPanel>
+        <!-- 顶部实时演示开关 -->
+        <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+            <Button Style="{DynamicResource LightExcel.PrimaryButtonStyle}" Content="新增一行" Click="AddRow_Click" Padding="12,5" Margin="0,0,8,4" />
+            <Button Content="删除末行" Click="RemoveLast_Click" Padding="10,5" Margin="0,0,14,4" />
+            <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="允许选中" IsChecked="{Binding IsSelectionEnabled, ElementName=ShowcaseSheet, Mode=TwoWay}" ToolTip="关闭后点击数据行不产生蓝色高亮，但格内按钮、开关、勾选框与自定义右键菜单仍可正常操作。" VerticalAlignment="Center" Margin="0,0,12,4" />
+            <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="只读模式" IsChecked="{Binding IsReadOnly, ElementName=ShowcaseSheet, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,4" />
+            <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="复制粘贴" IsChecked="{Binding CanUserCopyPaste, ElementName=ShowcaseSheet, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,4" />
+            <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="筛选" IsChecked="{Binding CanUserFilterColumns, ElementName=ShowcaseSheet, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,4" />
+            <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="显示行号" IsChecked="{Binding ShowRowNumbers, ElementName=ShowcaseSheet, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,4" />
+            <CheckBox x:Name="ThemeCheck" Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="浅色主题" Checked="ThemeCheck_Changed" Unchecked="ThemeCheck_Changed" VerticalAlignment="Center" Margin="0,0,12,4" />
+        </WrapPanel>
+
+        <!-- 底部交互反馈栏 -->
+        <Border DockPanel.Dock="Bottom" Margin="0,10,0,0" Padding="12,8" CornerRadius="8"
+                Background="#10FFFFFF" BorderBrush="{DynamicResource LightExcel.Border}" BorderThickness="1">
+            <TextBlock x:Name="ActionLog" Foreground="{DynamicResource LightExcel.Text}" TextWrapping="Wrap"
+                       Text="提示：本页所有列采用星号比例宽度（* / 100*）随窗口自动伸缩且无多余横向滚动条；当前默认关闭行选中高亮（IsSelectionEnabled=False），可直接点击格内按钮/开关/勾选框/下拉/日期，或右键打开自动跟随主题的标准菜单。" />
+        </Border>
+
+        <!-- 星号列宽 + 全套零开销格内控件演示表 -->
+        <Border Background="{DynamicResource LightExcel.Surface}" BorderBrush="{DynamicResource LightExcel.Border}" BorderThickness="1" CornerRadius="10" Padding="1">
+            <sheet:SpreadsheetVisual x:Name="ShowcaseSheet"
+                                     IsReadOnly="False"
+                                     IsSelectionEnabled="False"
+                                     CanUserSortColumns="True"
+                                     CanUserFilterColumns="True"
+                                     CanUserCopyPaste="False"
+                                     CornerRadius="9"
+                                     RowHeight="34"
+                                     ColumnHeaderHeight="36"
+                                     CellButtonClicked="ShowcaseSheet_CellButtonClicked">
+                <sheet:SpreadsheetVisual.RowContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="预览排程卡" Click="RowMenu_Preview_Click" />
+                        <MenuItem Header="快速补米 +100m" Click="RowMenu_AddMeters_Click" />
+                        <Separator />
+                        <MenuItem Header="删除此行" Click="RowMenu_Delete_Click" />
+                    </ContextMenu>
+                </sheet:SpreadsheetVisual.RowContextMenu>
+
+                <sheet:SpreadsheetVisual.Columns>
+                    <sheet:SheetTextColumn Width="65*" Header="序号" Binding="{Binding Serial}" IsReadOnly="True" HorizontalContentAlignment="Center" />
+                    <sheet:SheetTextColumn Width="80*" Header="类别" Binding="{Binding FluteCode}" HorizontalContentAlignment="Center" />
+                    <sheet:SheetTextColumn Width="140*" Header="纸质" Binding="{Binding PaperCode}" />
+                    <sheet:SheetTextColumn Width="95*" Header="纸宽(mm)" Binding="{Binding WidthMm}" HorizontalContentAlignment="Right" />
+                    <sheet:SheetTextColumn Width="90*" Header="米数(m)" Binding="{Binding Meters}" HorizontalContentAlignment="Right" />
+                    <sheet:SheetComboBoxColumn Width="110*" Header="班次" SelectedItemBinding="{Binding Shift}" ItemsSource="{Binding ShiftOptions}" />
+                    <sheet:SheetDatePickerColumn Width="125*" Header="排产日期" Binding="{Binding PlanDate}" />
+                    <sheet:SheetCheckBoxColumn Width="75*" Header="审核" Binding="{Binding IsApproved}" AccentColor="#38BDF8" />
+                    <sheet:SheetToggleSwitchColumn Width="95*" Header="启用" Binding="{Binding IsEnabled}" OnText="开" OffText="关" AccentColor="#22C55E" />
+                    <sheet:SheetProgressBarColumn Width="125*" Header="完工进度" Binding="{Binding Progress}" AccentColor="#38BDF8" />
+                    <sheet:SheetTemplateColumn Width="145*" Header="操作">
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Content="加急" Tag="Rush" Margin="0,0,6,0" />
+                                <Button Content="详情" Tag="Detail" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </sheet:SheetTemplateColumn>
+                </sheet:SpreadsheetVisual.Columns>
+            </sheet:SpreadsheetVisual>
+        </Border>
+    </DockPanel>
+</UserControl>

@@ -1,0 +1,731 @@
+﻿# LightExcel 1.9.97 使用手册
+
+LightExcel 是 Windows WPF 表格控件，适合显示、筛选、排序和编辑业务数据。第一次接入只需安装 NuGet 包、在 XAML 放一个 `SpreadsheetVisual`，再把数据绑定给 `ItemsSource`。深色主题、滚动条、列生成和控件卸载清理由控件处理。
+
+- [安装与第一个表格](#1-安装与第一个表格)
+- [自定义列和多级表头](#2-自定义列和多级表头)
+- [整表属性速查](#3-整表属性速查)
+- [每列属性速查](#4-每列属性速查)
+- [数据区合并的属性与用法](#数据区合并的属性与用法)
+- [鼠标和键盘操作](#5-鼠标和键盘操作)
+- [Ctrl+F 按列查找](按列查找.md)
+- [数据区合并与 Excel 导出](#数据区合并与-excel-导出)
+- [排序、筛选与索引](#6-排序筛选与索引)
+- [Excel 和 CSV 导入导出](#7-excel-和-csv-导入导出)
+- [代码接口与常见问题](#8-代码接口与常见问题)
+- [获取当前选中行](#9-获取当前选中行)
+- [读取整个当前视图](#读取整个当前视图)
+- [列设置与记忆](#10-列设置与记忆)
+- [底部汇总行与当前视图通知](#11-底部汇总行与当前视图通知)
+- [按条件改变整行文字颜色](#12-按条件改变整行文字颜色)
+- [一个程序使用多张报表](#13-一个程序使用多张报表)
+
+## 1. 安装与第一个表格
+
+**准备项目。** 在 Visual Studio 新建 **WPF 应用程序（.NET）**，目标框架选 `net10.0-windows`，平台使用 x64。下面的属性放在项目文件的 `PropertyGroup` 中。
+
+```xml
+<TargetFramework>net10.0-windows</TargetFramework>
+<UseWPF>true</UseWPF>
+<ImplicitUsings>enable</ImplicitUsings>
+<PlatformTarget>x64</PlatformTarget>
+```
+
+**安装包。** 从交付目录 `dist/nuget-protected` 取 `LightExcel.Core.1.9.97.nupkg` 和 `LightExcel.DataExchange.1.9.97.nupkg`，放进应用项目下的 `packages` 文件夹。在 Visual Studio 的 **工具 → NuGet 包管理器 → 程序包管理器设置 → 程序包源** 添加该文件夹。已有 `NuGet.Config` 的项目也可以在 `packageSources` 中加 `<add key="LightExcelLocal" value="packages" />`。保留原有包源用于还原其他依赖。
+
+在应用项目的 NuGet 管理器选中本地源并安装 **LightExcel.Core 1.9.97**。需要 Excel 或 CSV 文件功能时可以直接装 **LightExcel.DataExchange 1.9.97**，它会引用 Core。已还原的 `D:\Temp\LightExcel.StandardWpf` 可直接作为示例打开。
+
+**放置控件。** 下例假设新项目的默认命名空间是 `OrderDemo`，请将 `x:Class` 和后面的 C# 命名空间替换成你的项目名。
+
+```xml
+<Window x:Class="OrderDemo.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:sheet="clr-namespace:LightExcel.Controls;assembly=LightExcel.Benchmark"
+        Title="订单" Width="700" Height="400">
+    <Grid Margin="12">
+        <sheet:SpreadsheetVisual x:Name="Sheet" ItemsSource="{Binding Orders}" />
+    </Grid>
+</Window>
+```
+
+`MainWindow.xaml.cs` 可以先用下列数据跑通。窗口负责设置 `DataContext`，业务数据放在 ViewModel 中。
+
+```csharp
+using System.Collections.ObjectModel;
+using System.Windows;
+
+namespace OrderDemo;
+
+public partial class MainWindow : Window
+{
+    public MainWindow()
+    {
+        InitializeComponent();
+        DataContext = new OrdersViewModel();
+    }
+}
+
+public sealed class OrdersViewModel : System.ComponentModel.INotifyPropertyChanged
+{
+    private ObservableCollection<OrderRow> _orders =
+    [
+        new() { OrderNo = "SO-001", Customer = "星河商贸", Amount = 128m },
+        new() { OrderNo = "SO-002", Customer = "远航科技", Amount = 256m }
+    ];
+
+    public ObservableCollection<OrderRow> Orders
+    {
+        get => _orders;
+        set
+        {
+            _orders = value;
+            PropertyChanged?.Invoke(this,
+                new System.ComponentModel.PropertyChangedEventArgs(nameof(Orders)));
+        }
+    }
+
+    public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
+}
+
+public sealed class OrderRow
+{
+    public string OrderNo { get; set; } = "";
+    public string Customer { get; set; } = "";
+    public decimal Amount { get; set; }
+}
+```
+
+运行后会看到两条订单。自动列使用属性名或模型的 `DisplayName`。`ItemsSource` 可绑定 `List<T>`、数组、`ObservableCollection<T>`、`DataTable.DefaultView` 或支持按位置访问的 WPF 集合视图。数据库查询结果先物化成列表或 `DataTable`，再交给控件。在 UI 线程更新集合。集合整体替换时，ViewModel 对该属性发出 `PropertyChanged`；逐项增删用 `ObservableCollection<T>`；在表格外修改单条对象的属性时，让行对象实现 `INotifyPropertyChanged`。
+
+## 2. 自定义列和多级表头
+
+三种写法按需要选择。只绑定 `ItemsSource` 自动出列。需要自定单级列时写 `Columns`。需要合并分组头时绑定 `Headers`。同一张表选一种显式列配置方式。
+
+**单级列。** 在窗口上增加 `xmlns:model="clr-namespace:LightExcel.Benchmark.Models;assembly=LightExcel.Benchmark"`，把上一节的控件替换为下列内容。显式列优先，`AutoGenerateColumns` 可以省略。
+
+```xml
+<sheet:SpreadsheetVisual x:Name="Sheet" ItemsSource="{Binding Orders}"
+                         IsReadOnly="False" CanUserCopyPaste="True">
+    <sheet:SpreadsheetVisual.Columns>
+        <model:SheetColumn Header="订单号" Binding="{Binding OrderNo}"
+                           Width="120" IsReadOnly="True" />
+        <model:SheetColumn Header="客户" Binding="{Binding Customer}" Width="180" />
+        <model:SheetColumn Header="金额"
+                           Binding="{Binding Amount, Mode=TwoWay, StringFormat={}{0:N2}}"
+                           HorizontalContentAlignment="Right" />
+    </sheet:SpreadsheetVisual.Columns>
+</sheet:SpreadsheetVisual>
+```
+
+这里外层的 `ItemsSource="{Binding Orders}"` 找的是 ViewModel 的属性。列的 `Binding="{Binding Amount}"` 找的是每行订单的 `Amount`。简单字段也可以写 `BindingPath="Amount"`。使用转换器时，在列的 `Binding` 上配置 `Converter`、`ConverterParameter` 和 `ConverterCulture`。可编辑的转换器需提供 `ConvertBack`。`StringFormat` 用于显示，金额依然是 `decimal`，排序与筛选读取原字段。
+
+**多级列。** 在 `OrdersViewModel` 中加入以下属性。示例的“订单号”自动跨三层，“订单信息”横跨“客户”和“金额”。
+
+```csharp
+// 在文件顶部添加 using LightExcel.Benchmark.Models;
+public IReadOnlyList<SheetHeader> OrderHeaders { get; } =
+[
+    SheetHeader.Column(nameof(OrderRow.OrderNo), "订单号", isReadOnly: true),
+    SheetHeader.Group("订单信息",
+        SheetHeader.Group("明细",
+            SheetHeader.Column(nameof(OrderRow.Customer), "客户", c => c.Width = 180),
+            SheetHeader.Column(nameof(OrderRow.Amount), "金额", c =>
+            {
+                c.StringFormat = "{0:N2}";
+                c.HorizontalContentAlignment = HorizontalAlignment.Right;
+            })))
+];
+```
+
+```xml
+<sheet:SpreadsheetVisual x:Name="Sheet" ItemsSource="{Binding Orders}"
+                         Headers="{Binding OrderHeaders}" />
+```
+
+`Group` 定义分组，`Column` 定义一个实际数据列，最多 16 层。更换表头时替换整个列表并通知绑定；将 `Headers` 设为 `null` 或空列表后按 `AutoGenerateColumns` 配置恢复。可以向多张表提供同一个表头定义，列宽和排序状态分别管理。已有纯代码窗口也可以继续使用 `Sheet.SetHeaders(...)`。详见[多级合并表头](多级合并表头.md)。
+
+## 3. 整表属性速查
+
+下表是标准 `LightExcel.Controls.SpreadsheetVisual` 的默认值。直接写在 XAML 的控件标签上，或在 C# 用 `Sheet.属性名` 设置。同一属性如果已经绑定，运行时修改 ViewModel 中对应的值。
+
+| 属性 | 默认 | 作用 |
+| --- | --- | --- |
+| `ItemsSource` | 空 | 数据集合或数据视图 |
+| `AutoGenerateColumns` | `True` | 没有显式列定义时从数据字段生成列 |
+| `Columns` | 空集合 | 手动添加单级列，例见上一节 |
+| `Headers` | 空 | 绑定分组表头列表 |
+| `Theme` | `Dark` | 需要浅色时设置 `Light` |
+| `CornerRadius` | 8 | 外框圆角，0 为直角 |
+| `ShowRowNumbers` | `False` | 显示左侧行号；行号不是订单编号 |
+| `FrozenColumnCount` | 0 | 从左侧固定指定数量的列，例如 2 |
+| `FontSize` / `Foreground` | 12 / 随主题 | 正文与底部汇总共用字号和文字颜色，汇总默认加粗。单列 `ElementStyle` 可覆盖正文 |
+| `RowStyle` / `RowStyleError` | 空 / 空 | 数据行统一高度、字号和颜色，也可用数据触发器按行变色。见[条件行字体颜色](条件行字体颜色.md) |
+| `RowBackground` / `AlternatingRowBackground` | 随主题 | 当前视图奇数行／偶数行的背景，第一条为奇数行。见[深浅主题](主题与轻量外观.md) |
+| `ColumnHeaderStyle` / `SummaryRowStyle` | 空 / 空 | 分别配置表头和汇总的高度、字号、字重、字色、背景和对齐。见[常用表格配置与尺寸](常用表格配置与尺寸.md) |
+| `HeaderFontSize` / `HeaderForeground` | 12 / 随主题 | 各级列头的字号和文字颜色，单列 `HeaderStyle` 可覆盖该列表头 |
+| `RowHeight` / `MinRowHeight` | 27 / 0 | 数据行高与下限，实际取较大值 |
+| `ColumnHeaderHeight` | 34 | 每一级表头的高度 |
+| `ColumnWidth` | `Auto` | 全表默认列宽。自动时按表头测量，单列 `Width` 优先 |
+| `MinColumnWidth` / `MaxColumnWidth` | 20 / 无穷 | 未单独设置时的列宽下限与上限 |
+| `VerticalScrollBarVisibility` / `HorizontalScrollBarVisibility` | `Auto` | 横纵滚动条可设 `Auto`、`Visible`、`Hidden`、`Disabled` |
+| `CanUserSortColumns` | `False` | 开启用户列头排序 |
+| `CanUserFilterColumns` | `False` | 开启右键列头筛选菜单 |
+| `CanUserFind` | `True` | Ctrl+F 按列查找，向上／向下循环定位当前视图中的匹配行 |
+| `IsLayoutPersistenceEnabled` | `False` | 开启后按页面类型和 x:Name 记住列顺序。列设置入口还需开启 `CanUserHideColumns` |
+| `CanUserHideColumns` | `False` | 默认隐藏「列设置」入口。与 `IsLayoutPersistenceEnabled` 同时开启后显示入口，并恢复已保存的列显隐偏好 |
+| `LayoutKey` | 空字符串 | 可选身份覆盖值；默认自动使用页面类型＋x:Name。同类页面需独立业务偏好时才设置，兼容旧标识 |
+| `LayoutError` / `LayoutWhenIdle` | 空／已完成 | 最近记忆错误／等待内部保存恢复，普通接入无需调用 |
+| `CanUserReorderColumns` | `True` | `True` 允许拖动表头换列，`False` 禁止拖动换列 |
+| `CanUserResizeColumns` | `True` | 控制能否拖动表头边界调整列宽 |
+| `Filter` | 空 | 当前筛选表达式，可与 ViewModel 双向绑定 |
+| `IsIndexEnabled` | `False` | 允许控件按需建立查询索引 |
+| `FilterExecutionMode` | `Automatic` | 可选 `Scan` 或 `Index`，一般保留默认 |
+| `IsReadOnly` | `True` | 只读时选中整行。设为 `False` 后按单元格选中，可编辑可写列 |
+| `CanUserCopyPaste` | `False` | 启用复制和粘贴。可编辑表支持矩形多选，写入受只读限制 |
+| `IsAutoMergeEnabled` | `False` | 开启自动合并，只作用于设置了 `MergePolicy` 的列 |
+| `IsManualMergeEnabled` | `False` | 开启手动合并和固定合并范围。关闭暂时隐藏固定范围，再开启可恢复仍适用的范围 |
+| `CanUserMergeCells` | `True` | 控制右键菜单能否合并和取消合并，须开启手动合并且处于单元格选择模式。代码调用和声明式范围不受此权限限制 |
+| `MergeKeyPath` | 空字符串 | 固定合并使用的行主键字段，例如 `OrderNo`。声明式固定范围须配置唯一、稳定的主键 |
+| `CellMergesSource` | 空 | 绑定 `IEnumerable<SheetCellMergeDefinition>`，按行主键和列键声明固定合并范围 |
+| `IsCellMergeEnabled` | `False` | 兼容旧版的总开关。设为 `True` 会同时开启自动合并和手动合并 |
+| `CanSelectMultipleRows` | `False` | 只读表默认单选整行。设为 `True` 后支持 Ctrl 跳选、Shift 连选与拖选 |
+| `SelectionMode` | `Extended` | 用于可编辑表。启用 `CanUserCopyPaste` 后可选矩形区域，设为 `Single` 可限制为单格 |
+| `IsUndoEnabled` | `True` | 记录已提交的编辑历史，关闭时清空 |
+| `UndoLimit` | 50 | 允许 20～50 步，实际历史还受 16 MiB 及引擎内存预算约束 |
+
+尺寸单位为 WPF DIP。`RowHeight` 与 `ColumnHeaderHeight` 支持 2～4096。固定列以显示顺序为准，水平滚动时保留在左侧；鼠标拖列不能跨越固定区边界或拆散合并分组。例见[常用表格配置与尺寸](常用表格配置与尺寸.md)和[固定列与只读复制](固定列与只读复制.md)。
+
+## 4. 每列属性速查
+
+这些属性用于 `SheetColumn`，也能在 `SheetHeader.Column(..., c => { ... })` 内设置。
+
+| 属性 | 默认 | 作用 |
+| --- | --- | --- |
+| `Header` | 空 | 显示标题；空时取字段的显示名称 |
+| `Binding` / `BindingPath` | 空 | 行属性绑定或字段名；使用一个即可 |
+| `StringFormat` | 空 | 例如 `{0:N2}`、`{0:yyyy-MM-dd}` |
+| `MergePolicy` | `None` | `None` 保持普通格，`Always` 合并相邻同值，`Restricted` 只在同一个上级分组内合并相邻同值 |
+| `MergeComparison` | `RawValue` | `RawValue` 比较原始类型和值。`DisplayText` 比较格式化后的显示文字，例如显示出的年月日 |
+| `MergeGroupPath` | 空字符串 | 指定 `Restricted` 的上级字段。空值使用前一显示列。显式指定时，需指向当前列之前唯一且已配置合并的绑定字段 |
+| `CellMergeRule` | 空 | C# 相邻值比较委托，接收 `SheetCellMergeContext`，返回 `true` 表示允许合并。它仍受 `Restricted` 的上级分组约束 |
+| `IsReadOnly` | `False` | 只读列可复制，禁止编辑与粘贴 |
+| `Width` / `MinWidth` / `MaxWidth` | `Auto` / 20 / 无穷 | 显式设置后优先于表格的对应宽度规则 |
+| `DisplayIndex` | -1 | 沿用声明顺序；显式索引从 0 开始 |
+| `Visibility` | `Visible` | 用 `Collapsed` 隐藏列 |
+| `CanUserHide` | `True` | 是否允许用户在列设置中改变本列显示状态；False 时程序定义优先 |
+| `LayoutKey` | 空字符串 | 特殊列的稳定身份；普通唯一字段自动用 BindingPath，无需逐列配置 |
+| `CanUserSort` / `CanUserFilter` | `True` | 限制本列；整表还需开启对应开关 |
+| `CanUserReorder` | `True` | 设为 `False` 可单独禁止拖动此列表头，整表还须允许拖动换列 |
+| `CanUserResize` | `True` | 设为 `False` 可单独禁止调整本列宽度 |
+| `SortMemberPath` | 空 | 指定排序字段，空时用绑定字段 |
+| `SortDirection` | 空 | 当前排序标记；通过 `SortColumn` 发起实际排序 |
+| `HorizontalContentAlignment` / `VerticalContentAlignment` | 空 | 正文水平及垂直对齐 |
+| `HeaderHorizontalContentAlignment` / `HeaderVerticalContentAlignment` | 空 | 叶列表头水平及垂直对齐 |
+| `ElementStyle` / `CellStyle` / `HeaderStyle` | 空 | 可配置控件支持的文字、对齐等样式项。直接对齐属性优先 |
+
+列绑定读取行对象的单个属性或数据列，支持 `Default`、`TwoWay` 和 `OneWay`。可写字段通常用 `TwoWay`，只显示用 `OneWay`。单元格为轻量绘制，适合用上述属性配置。复杂单元格模板、公式计算、工作簿编辑和数据库保存需要由业务另行实现。详见[常用列设置](常用列设置.md)。
+
+## 数据区合并的属性与用法
+
+数据区合并有 `IsAutoMergeEnabled` 和 `IsManualMergeEnabled` 两个独立开关。StandardWpf 订单示例中分别对应「自动合并指定列」和「允许手动合并」。旧项目单独使用 `IsCellMergeEnabled="True"` 时会同时开启两种功能。多级表头的跨行跨列由 `Headers` 和 `SheetHeader.Group` 定义。 [多级表头配置](#2-自定义列和多级表头)
+
+### 自动合并指定列
+
+在表格上开启 `IsAutoMergeEnabled`，然后给要合并的列设置 `MergePolicy`。下面使用第 1 节的订单模型，只合并「客户」列。将示例中的两条订单设为相同客户，便能看到它们合成一格。筛选或排序后按当前视图中的相邻关系重新分组。
+
+```xml
+<sheet:SpreadsheetVisual ItemsSource="{Binding Orders}" IsAutoMergeEnabled="True"
+                         xmlns:model="clr-namespace:LightExcel.Benchmark.Models;assembly=LightExcel.Benchmark">
+    <sheet:SpreadsheetVisual.Columns>
+        <model:SheetColumn Header="客户" BindingPath="Customer" MergePolicy="Always" />
+        <model:SheetColumn Header="金额" BindingPath="Amount" />
+    </sheet:SpreadsheetVisual.Columns>
+</sheet:SpreadsheetVisual>
+```
+
+使用多级表头时，在 `SheetHeader.Column` 的配置回调中设置同一个属性，并在 XAML 给绑定了 `Headers` 的表格加 `IsAutoMergeEnabled="True"`。
+
+```csharp
+// using LightExcel.Benchmark.Models;
+public IReadOnlyList<SheetHeader> OrderHeaders { get; } =
+[
+    SheetHeader.Group("订单信息",
+        SheetHeader.Column(nameof(OrderRow.Customer), "客户", c => c.MergePolicy = SheetMergePolicy.Always),
+        SheetHeader.Column(nameof(OrderRow.Amount), "金额"))
+];
+```
+
+例如业务希望把包含不同时刻的订单按日期合并，可以把日期列的 `StringFormat` 设为 `{0:yyyy-MM-dd}`，再设 `MergeComparison="DisplayText"`。如果某列只在指定上级组内合并，则设 `MergePolicy="Restricted"`，用 `MergeGroupPath` 指定上级列的绑定字段。
+
+### 手动合并与取消
+
+在表格上设 `IsManualMergeEnabled="True"`、`IsReadOnly="False"`。保持 `CanUserMergeCells="True"` 和 `SelectionMode="Extended"` 的默认配置，框选至少两个连续单元格，右键选择「合并单元格」。要恢复原来的明细显示，右键点击手动合并块，选择「取消此合并」。选区应位于冻结区或滚动区内，且避开已有合并块。
+
+```xml
+<sheet:SpreadsheetVisual x:Name="Sheet" ItemsSource="{Binding Orders}"
+                         IsManualMergeEnabled="True" IsReadOnly="False"
+                         MergeKeyPath="OrderNo" />
+```
+
+数据加载后，也可以在代码中合并当前视图的指定范围。行、列索引从数据区左上角的 `0` 开始。以下示例合并第一列的前两行，返回的 ID 可用于查询状态或取消合并。
+
+```csharp
+// using LightExcel.Benchmark.Models;
+Guid mergeId = await Sheet.MergeCellsAsync(new SheetMergeRange(row: 0, column: 0, rowCount: 2));
+SheetCellMergeStatus? status = Sheet.GetCellMergeStatus(mergeId);
+
+// 需要取消时调用。
+await Sheet.UnmergeCellsAsync(mergeId);
+```
+
+要从 ViewModel 声明固定范围，在示例控件上再绑定 `CellMergesSource="{Binding OrderMerges}"`。每个 `SheetCellMergeDefinition` 提供有序的行主键列表和列键列表。列键优先用列的 `LayoutKey`，其次用绑定字段名。比如 `new SheetCellMergeDefinition(rowKeys: ["SO-001", "SO-002"], columnKeys: ["Customer"])` 表示将这两条订单的客户格合并，成员须在当前视图中保持相邻及原顺序。 [固定合并详细说明](数据单元格合并.md#按记录身份固定合并)
+
+合并只改变显示，每条源记录的值都会保留。自动和手动合并可以一起开启，自动合并会在固定块边界断开。手动合并块沿用奇偶行配色，从上往下、同一行从左往右交替填色。 [数据区合并与 Excel 导出](#数据区合并与-excel-导出)
+
+## 5. 鼠标和键盘操作
+
+| 任务 | 操作和条件 |
+| --- | --- |
+| 单选 / 连续与跳选 | 点击单元格。启用复制粘贴后，拖选、Shift+点击或 Shift+方向键扩展矩形。Ctrl 跳选／取消，Ctrl+Shift 追加范围；Ctrl+A 选择数据区域 |
+| 复制 | Ctrl+C，或右键选区选“复制”。整表只读时也能复制 |
+| 粘贴 | Ctrl+V 或右键选“粘贴”。多格剪贴板从起始格向右下写入，单值可填入连续选区。目标越界、含只读格或转换失败时整块拒绝 |
+| 拖拽填充 | 按住选区右下角小方块向上下左右拖动，松手提交。跳过只读或类型不匹配的目标，Esc 取消 |
+| 编辑 | 设 `IsReadOnly="False"`。双击、F2 或在选中格直接输入。Enter 提交，Esc 取消，Tab 提交并切到下一个可编辑格 |
+| 撤销 / 重做 | Ctrl+Z 撤销，Ctrl+Y 或 Ctrl+Shift+Z 重做。一次编辑、粘贴、拖拽填充各记一步 |
+| 排序 / 筛选 | 启用对应开关后左键点叶列表头排序，右键点叶列表头筛选 |
+| 调列宽 / 移列 | 拖动表头边界调宽，拖动表头主体移列 |
+| 滚动 | 使用内置滚动条或鼠标滚轮 |
+| 翻页 | PageUp／PageDown 先选中当前画面页顶／页底，再按才翻一屏并选中新页对应边缘，保持所选列。首尾停住，Shift 可扩展选区 |
+| 首尾定位 | 按 Home 到当前视图第一行首个显示列，按 End 到最后一行末个显示列，同时滚动到对应位置 |
+| 查找 | Ctrl+F 打开；默认第一显示列，输入内容后点向上／向下查找。Enter 向下，Shift+Enter 向上，Esc 关闭 |
+
+编辑写回当前数据对象。数据库写入、校验、权限和事务由业务项目负责。详见[编辑](单元格内置编辑.md)、[复制粘贴](多选与复制粘贴.md)、[拖拽填充](拖拽填充.md)和[撤销重做](撤销与重做.md)。
+
+查找只定位，不过滤或修改数据。范围是当前筛选、排序后的全部视图行，按该列实际显示的文字进行不区分大小写的包含匹配；找到后自动滚动并选中对应行／格。到达首尾后循环，无匹配保留原位置。默认可用，无需注册窗口事件，详见[按列查找](按列查找.md)。
+
+## 6. 排序、筛选与索引
+
+- **用户排序**。打开 `CanUserSortColumns` 后点击叶列表头。若只允许某些列排序，其余列设置 `CanUserSort="False"`。
+- **用户筛选**。打开 `CanUserFilterColumns` 后右键叶列表头。引擎按原始字段类型自动提供规则：文字列用包含／开头／结尾／等于，数字列用大于／小于／等于／介于，日期时间列用早于／晚于／等于／介于。均支持空白判断和值列表，无需另配类型；格式化和转换器不改变原字段类型。规则详见[列头筛选使用说明](列头筛选使用说明.md)。“搜索／浏览候选”最多展示 200 个原值，输入会有约 300 毫秒防抖。候选上限只限制选择菜单，直接应用文本或范围条件会返回全部匹配行。“清除此列”保留其他列条件，“清除全部”清除本表筛选。
+- **索引**。简单展示、偶尔筛选时用默认关闭配置。内存中的相同字段需要反复筛选时可设 `IsIndexEnabled="True"`，由引擎按需选择索引和扫描。首次建立索引会花时间并占用内存。手动设 `Scan` 可强制扫描。
+
+**多列筛选会自动叠加。** 同一列勾选多个值表示“或者”，不同列之间表示“并且”。例如行业选“电子制造或食品饮料”，再在厂区选“杭州厂”，最终只保留这两个行业中属于杭州厂的记录。修改或清除某一列，只替换或删除该列条件，其他列条件仍保留。
+
+**候选列表与最终结果的范围稍有区别。** 打开某一列的候选列表时，会保留其他列条件，暂时忽略本列条件，让你能重新选择本列的其他值。例如行业已选“电子制造”，厂区已选“杭州厂”，重新打开厂区菜单仍可能看到“深圳厂”；这是为了允许更换厂区，表格中的最终数据仍必须同时满足行业和厂区条件。搜索候选不直接改变表格，勾选后点击“应用”才生效。
+
+业务代码也能直接设置筛选。字段用属性名或数据列名，例如 `Amount`。注意：`ApplyFilterAsync` 设置的是整套条件，调用时会替换原整套条件；需要多个条件时按下面示例用 `And` 组合。列头菜单会在内部自动处理逐列叠加。
+
+```csharp
+using LightExcel.Benchmark.Queries;
+
+await Sheet.ApplyFilterAsync(SheetFilter.And(
+    SheetFilter.Contains("Customer", "科技"),
+    SheetFilter.GreaterThanOrEqual("Amount", 100m)));
+
+// 0 是第一个显示列。null 表示取消指定排序。
+Sheet.CanUserSortColumns = true;
+Sheet.SortColumn(0, System.ComponentModel.ListSortDirection.Ascending);
+await Sheet.FilterWhenIdle;
+await Sheet.ClearFilterAsync();
+```
+
+`SheetFilter` 还提供 `Equal`、`NotEqual`、`In`、`Between`、`LessThan`、`LessThanOrEqual`、`GreaterThan`、`StartsWith`、`EndsWith`、`IsBlank`、`IsNotBlank` 和 `Or`。有自己的筛选 ViewModel 时可用 `Filter="{Binding OrderFilter, Mode=TwoWay}"`，由 ViewModel 管理条件。处理异步筛选完成时检查 `FilterError`，也可订阅 `FilterFailed`。详见[列头筛选使用说明](列头筛选使用说明.md)和[查询索引开关](查询索引开关.md)。
+
+### 数据刷新时，筛选会怎样
+
+`ItemsSource="{Binding Orders}"` 只写一次。重新查库成功后，给 `Orders` 赋新的集合并发出属性变化通知即可。表格会用已设的筛选条件匹配新数据。例如，原来筛选“待排产”，新结果没有待排产订单时显示 0 行。以后刷新查到新的待排产订单，它们会自动出现。右键表头选择“清除全部”即可查看此次加载的所有记录。
+
+| 业务操作 | 筛选行为 |
+| --- | --- |
+| 刷新同一份订单，包括返回同样的数据或新的集合对象 | 保留筛选条件，结果以新数据为准 |
+| 在原集合中增删记录，或通过属性通知修改行 | 根据变更更新筛选结果 |
+| 用户选择查看全部，或页面明确切换到另一份业务数据且需要重新开始 | 主动清空筛选。用表头菜单、`await Sheet.ClearFilterAsync()`，或者将已绑定的筛选属性设为 `null` |
+
+定时刷新时，如果数据层已有可靠的版本号或变更通知，可在确认结果相同后跳过 `Orders` 赋值。只有整批查询结果时，可以直接替换一次集合，当前版本会重新计算新批次的筛选结果。有明确的行级变化时，可通过集合和属性通知提交变更，符合条件时引擎会增量维护结果。即使新旧集合的行数相同，也可能有订单金额、状态等值发生变化。
+
+工厂每秒提交一小批增删改时，保持 `Orders` 集合实例。后台查库，回到 UI 线程后集中执行 `Add`、`Remove` 或按主键替换对应记录。行对象实现了 `INotifyPropertyChanged` 时，也可直接修改属性。控件收到变化后自动维护视图和汇总。接入示例见[每秒更新订单](ItemsSource数据绑定.md#每秒更新订单)。
+
+“已加载”是原始查询返回的行数，“当前显示”是应用本表筛选后剩下的行数。例如已加载 100,000 条、当前显示 1 条，表示新数据里有 1 条满足条件。业务界面可同时显示这两个数字，在 0 条时提供清除筛选的入口。
+
+## 7. Excel 和 CSV 导入导出
+
+安装 `LightExcel.DataExchange` 后，在 ViewModel 的异步命令中调用导入和导出。默认 XLSX，导出包含表头。
+
+- **导出全部源数据**用 `SpreadsheetFiles.ExportAsync(OrderHeaders, SourceOrders)`，按源集合顺序逐行写入全部已加载或导入的记录。
+- **导出当前视图**用 `sheet.ExportAsync()`，按当前排序逐行写入符合筛选条件的记录，包括屏幕外的行。筛选零命中时只导出表头。
+- **导出合并视图**按当前筛选和排序写入记录，同时把视图里的数据区合并范围写入 XLSX。
+- **导入明细**先按当前列定义校验文件，再把完整文件数据交给 ViewModel 的源集合属性。例如 `importedOrders => Orders = importedOrders` 表示整批替换，示例项目把这个源属性命名为 `SourceOrders`。当前筛选条件继续应用，符合的记录进入视图，其他记录仍留在源集合里。清除筛选后可以看到全部导入记录。
+
+```csharp
+using LightExcel.DataExchange;
+
+// sheet 是按钮通过 CommandParameter 传入的表格。
+await sheet.FilterWhenIdle;
+await sheet.ExportAsync();
+
+// 直接传入完整源集合，导出全部订单。
+await SpreadsheetFiles.ExportAsync(OrderHeaders, SourceOrders);
+
+// OrderHeaders 是 ViewModel 已有的多级表头定义。
+await SpreadsheetFiles.ImportAsync<OrderRow>(
+    OrderHeaders, importedOrders => Orders = importedOrders);
+```
+
+### 数据区合并与 Excel 导出
+
+StandardWpf 的「导出合并视图」可用于自动合并和手动合并。先开启对应的合并功能，并确认界面上显示了要导出的合并块。 [数据区合并的属性与用法](#数据区合并的属性与用法)
+
+复制单个合并格时，Ctrl+C 取主格的值。选中另一列的可写单元格后按 Ctrl+V 即可粘贴，选中连续的普通格可填入同一个值。把单值粘贴到一个手动合并格，只更新主格，保留合并和覆盖格原值。
+
+「导出合并视图」会将当前启用的合并布局写入 XLSX。默认的 `Flat` 模式逐行写入数据区原值。包含表头的 XLSX 导出都会保留已配置的表头合并。
+
+```csharp
+await sheet.ExportAsync(new FileExportOptions
+{
+    CellMergeMode = CellMergeExportMode.CurrentView
+});
+```
+
+如果被覆盖的单元格有不同于主格的非空值，合并导出会报错，以保留每条明细值。合并结构使用 XLSX，CSV 用于平铺数据。 [合并导入导出详细用法](数据单元格合并文件交换.md)
+
+### 导入导出命令示例
+
+下面是在已有 ViewModel 中添加命令的设置片段。示例使用 CommunityToolkit.Mvvm，`Orders` 是已有的可替换数据属性，setter 发出 `PropertyChanged`，`OrderHeaders` 是已有表头定义。将命令的初始化放进你现有的构造函数。
+
+```csharp
+using CommunityToolkit.Mvvm.Input;
+using LightExcel.Controls;
+using LightExcel.DataExchange;
+using System.Windows.Input;
+
+public ICommand ImportCommand { get; }
+public ICommand ExportCommand { get; }
+public ICommand ExportSourceCommand { get; }
+
+// 在已有的 ViewModel 构造函数中初始化。
+ImportCommand = new AsyncRelayCommand(async () =>
+{
+    try
+    {
+        await SpreadsheetFiles.ImportAsync<OrderRow>(
+            OrderHeaders, importedOrders => Orders = importedOrders);
+    }
+    catch (Exception ex)
+    {
+        Status = "导入失败：" + ex.Message;
+    }
+});
+
+ExportCommand = new AsyncRelayCommand<SpreadsheetVisual>(async sheet =>
+{
+    if (sheet is null) return;
+
+    try
+    {
+        await sheet.FilterWhenIdle;
+        await sheet.ExportAsync();
+    }
+    catch (Exception ex)
+    {
+        Status = "导出失败：" + ex.Message;
+    }
+});
+
+ExportSourceCommand = new AsyncRelayCommand(async () =>
+{
+    if (Orders is not { } source) return;
+
+    try
+    {
+        await SpreadsheetFiles.ExportAsync(OrderHeaders, source);
+    }
+    catch (Exception ex)
+    {
+        Status = "导出失败：" + ex.Message;
+    }
+});
+```
+
+`Status` 为 ViewModel 中用于显示提示的字符串属性。需要阻止导入和导出同时执行时，用共同的忙状态控制命令可用性。标准 WPF 示例已经实现这部分处理。
+
+```xml
+<Button Content="导入 Excel" Command="{Binding ImportCommand}" />
+<Button Content="导出当前视图" Command="{Binding ExportCommand}"
+        CommandParameter="{Binding ElementName=Sheet}" />
+<Button Content="导出全部源数据" Command="{Binding ExportSourceCommand}" />
+<sheet:SpreadsheetVisual x:Name="Sheet" ItemsSource="{Binding Orders}"
+                         Headers="{Binding OrderHeaders}" />
+```
+
+文件选择、字段映射、对象转换和临时表释放由库执行。导入支持替换源或由业务按主键合并。需要保留已有订单和未导入字段时，在回调中按主键合并，并通过集合或属性通知提交实际增删改。
+
+独立导出指定集合时，可以按列定义所在的位置选择调用方式。
+
+| 列的定义位置 | ViewModel 中的导出写法 | 导出内容 |
+| --- | --- | --- |
+| 只绑定数据、自动生成列 | `await SpreadsheetFiles.ExportAsync(Orders);` | 根据模型属性或 DisplayName 自动生成表头，导出传入集合 |
+| ViewModel 中定义了 `IReadOnlyList<SheetColumn> OrderColumns` | `await SpreadsheetFiles.ExportAsync(OrderColumns, Orders);` | 使用这些普通列的标题、顺序和字段 |
+| ViewModel 中定义了 `OrderHeaders` | `await SpreadsheetFiles.ExportAsync(OrderHeaders, Orders);` | 使用分组表头的合并范围、叶列顺序与字段 |
+
+普通列也可以导入，写法为 `await SpreadsheetFiles.ImportAsync<OrderRow>(OrderColumns, importedOrders => Orders = importedOrders);`。`OrderColumns` 是现有的 `SheetColumn` 列定义列表。例如下列两列导出后显示“订单号”和“金额”。
+
+```csharp
+using LightExcel.Benchmark.Models;
+
+public IReadOnlyList<SheetColumn> OrderColumns { get; } =
+[
+    new() { BindingPath = nameof(OrderRow.OrderNo), Header = "订单号" },
+    new() { BindingPath = nameof(OrderRow.Amount), Header = "金额", StringFormat = "{0:N2}" }
+];
+```
+
+没有显式列定义的导出会读取模型的全部可生成字段。即使某个窗口只显示 20 列，直接传入具有 100 个字段的 `Orders` 也会生成全部可生成字段；要限定列数，传入对应的列定义。
+
+同样的命令参数也可用于按 XAML 单级表头导入。
+
+```xml
+<Button Content="导入 Excel" Command="{Binding ImportCommand}"
+        CommandParameter="{Binding ElementName=Sheet}" />
+```
+
+```csharp
+ImportCommand = new AsyncRelayCommand<SpreadsheetVisual>(async sheet =>
+{
+    if (sheet is not null)
+        await sheet.ImportAsync<OrderRow>(importedOrders => Orders = importedOrders);
+});
+```
+
+传入集合的导出使用该集合及其集合视图可见范围。表格内部独立筛选和拖列状态由实际控件持有。业务页面上的导出按钮使用表格参数入口，普通表头和多级表头均可使用。需要定时刷新数据时，可以在导出期间暂缓提交源更新。库检测到导出中的视图或数据源变化会报错并丢弃临时文件。
+
+导入需要模型有公开的无参构造函数，以及与绑定字段同名的公开可写属性。表头与字段映射由现有列定义决定。只读列只约束界面编辑，导入创建的新对象仍可初始化这些字段。空值映射到可空属性或引用类型；非可空数值收到空值会报错。属性 setter 中的业务校验失败时，当前集合保留。导入会创建新对象，只有列定义涉及的字段会赋入文件值，其他模型属性使用构造时的默认值。需要保留旧对象额外字段时，使用 DataTable 自定义映射入口按业务主键合并。
+
+带文件对话框的入口返回 `Task<bool>`，取消选择返回 False，完成操作返回 True。指定路径的入口返回 `Task`，完成时正常返回，错误或取消会抛出异常。格式错误会抛异常，按钮处理程序可捕获并显示 `ex.Message`。`importedOrders => Orders = importedOrders` 回调建议只做一次数据属性赋值，由业务代码负责这次赋值的通知及旧数据资源管理。
+
+```csharp
+// CSV 通过代码显式选择。
+await sheet.ExportAsync(new FileExportOptions { Format = SpreadsheetFileFormat.Csv });
+await SpreadsheetFiles.ImportAsync<OrderRow>(OrderHeaders, importedOrders => Orders = importedOrders,
+    new() { Format = SpreadsheetFileFormat.Csv });
+
+// 已知路径，省去对话框。
+await sheet.ExportAsync(@"D:\Temp\订单.xlsx");
+await SpreadsheetFiles.ImportAsync<OrderRow>(OrderHeaders, @"D:\Temp\订单.xlsx", importedOrders => Orders = importedOrders);
+```
+
+导入内部复用现有表头校验、字段转换和异步读取，再按批创建对象。全部成功后才调用回调，避免错误或取消留下半批数据。ViewModel 命令应在文件操作期间设置忙状态，避免重复发起操作。一次导入的临时表由库释放。数据库写入仍由业务保存命令负责。
+
+窗口后台已有代码时，也可以继续调用 `Sheet.ImportAsync<T>(...)` 与 `Sheet.ExportAsync()`。
+
+需要 DataView 或自定义业务映射时，可继续使用以下较底层接口。导入获得的 DataTable 由调用方持有和释放。
+
+| 接口或选项 | 用法 |
+| --- | --- |
+| `SpreadsheetFiles.ImportAsync(Sheet, path, options)` | 按现有表头和字段校验并返回映射结果 |
+| `SpreadsheetFiles.ImportAsync(path, options)` | 单独读取文件为 `DataTable` |
+| `SpreadsheetFiles.ExportAsync(Sheet, path, options)` | 导出当前筛选和排序后的整表数据，默认包含表头 |
+| `FileImportOptions` | `Format`、`WorksheetName`、`FirstRowIsHeader`、`HeaderRowCount`、`ColumnMatching`、`CsvSeparator`、`CsvEncoding`、`MaxRows`、`MaxColumns`、`MaxCells`、`MaxTotalTextCharacters`、`MaxExpandedFileBytes` |
+| `FileExportOptions` | `Format`、`WorksheetName`、`IncludeHeaders`、`Overwrite`、`CsvSeparator`、`CsvEncoding`、`ProtectCsvFormulaText`、`CellMergeMode`、`CellMerges` |
+
+读写 CSV 时显式传 `SpreadsheetFileFormat.Csv`。程序直接写文件默认拒绝覆盖，允许覆盖时设置 `Overwrite = true`。按表头匹配导入时，表头名称与分组结构需匹配；位置匹配用 `ColumnMatching = ImportColumnMatching.Position`。XLSX 可保存合并表头，CSV 用文本行表示多级表头。文件错误可捕获 `SheetImportException` 并查看 `Code`、`DataRow`、`Field`；调用支持传入取消令牌。
+
+## 8. 代码接口与常见问题
+
+| 业务需求 | 接口 |
+| --- | --- |
+| 看表格当前大小与选区 | `DataRowCount`、`DataColumnCount`、`VisibleRows`、`SelectedRange`、`SelectionChanged` |
+| 获取所有选中行 | `SelectedItems`，用 `Mode=OneWayToSource` 绑定至 ViewModel；返回完整原始行；`SelectedRanges` 返回所有实际选区 |
+| 获取筛选、排序后的全部行 | `ViewItems`，用 `Mode=OneWayToSource` 绑定至 ViewModel |
+| 获取或设置当前选中行 | `SelectedItem`、`SelectedIndex`，两者默认双向绑定 |
+| 选格、选区、定位 | `SelectCell`、`SelectRange`、`SelectAllCells`、`ClearSelection`、`SetViewport`。行列索引从 0 开始，使用当前显示顺序 |
+| 读取与写入 | `GetBoundItem`、`GetBoundCellValue`、`TrySetCellValue` |
+| 控制编辑 | `BeginEdit`、`CommitEditAsync`、`CancelEdit`、`IsEditing`、`EditWhenIdle`、`EditError`。业务校验可订阅 `BeginningEdit`、`PreparingCellForEdit`、`CellEditEnding`、`EditFailed` |
+| 剪贴板 | `CopyAsync`、`PasteAsync`（可传文本）、`IsClipboardBusy`、`ClipboardWhenIdle`、`ClipboardError`、`ClipboardOperationFailed`、`FillSkippedCellCount` |
+| 撤销与重做 | `UndoAsync`、`RedoAsync`、`ClearUndo`、`CanUndo`、`CanRedo`、`UndoCount`、`RedoCount`、`UndoError`、`UndoWhenIdle` |
+| 筛选与刷新 | `ApplyFilterAsync`、`ClearFilterAsync`、`RefreshFilterAsync`、`FilterWhenIdle`、`FilterError`、`FilterFailed` |
+| 兼容旧入口和高级数据源 | `SetHeaders`、`Engine`。高级场景可使用[分页数据源](第八轮-分页数据边界与异步生命周期.md)或[自定义窗口宿主](WPF接入与资源所有权.md) |
+
+- **表格空白**。确认窗口 `DataContext` 已设置，`ItemsSource` 路径能找到集合，显式列字段名与模型一致。给控件放在有可用宽高的 `Grid` 中。代码诊断可查看 `Sheet.Engine.ItemsSourceBindingError`。
+- **只能看，改不了**。检查整表 `IsReadOnly`、列 `IsReadOnly`、绑定方向和模型 setter。粘贴还要打开 `CanUserCopyPaste`。
+- **数据改了，界面没变**。集合替换通知 ViewModel 属性变化，外部改行属性通知 `INotifyPropertyChanged`。静默批量变更且需要重新筛选时，可在更新结束后调用 `RefreshFilterAsync`。
+- **拖动、筛选和编辑同时使用**。表格按当前显示顺序处理选区。需要持久定位业务对象时使用订单号等业务主键，避免记住排序前的行号。
+- **关闭页面或取消加载**。标准控件卸载时清理自身资源，重载时恢复数据绑定。数据库连接、导入表和页面加载任务由业务项目管理。多个表格可各自绑定数据及状态，参见[多表复用与撤销共享预算](多表复用与撤销共享预算.md)。
+
+安装、绑定和进阶能力的参考项目是 `D:\Temp\LightExcel.StandardWpf`。其中 `MainWindow.xaml` 直接绑定数据和三级表头，`MainViewModel.cs` 提供业务数据与列定义。
+
+## 9. 获取当前选中行
+
+标准控件默认 `IsReadOnly="True"`，点击数据格或可见的行号会选中一整行。需要用 Ctrl 跳选、Shift 连选或拖动选多行时设置 `CanSelectMultipleRows="True"`。复制由 `CanUserCopyPaste` 单独控制，启用后复制选中行的可见列。
+
+同一张表可以混用只读列和可编辑列。将整表设为 `IsReadOnly="False"`，再将订单号等列设为 `IsReadOnly="True"`。两类列点击时都选中单元格。只读列可以复制，可编辑列还可以编辑和粘贴。粘贴范围碰到只读列时会拒绝整次粘贴。切换整表的只读状态时会保留活动行。
+
+像 DataGrid 一样，在 XAML 绑定 `SelectedItem` 和 `SelectedIndex`。自动列、普通单级表头和多级表头都用同样的写法。
+
+```xml
+<sheet:SpreadsheetVisual x:Name="Sheet" ItemsSource="{Binding Orders}"
+                         SelectedItem="{Binding SelectedOrder}"
+                         SelectedIndex="{Binding SelectedOrderIndex}" />
+```
+
+在 ViewModel 声明相应属性。以下写法适用于继承 CommunityToolkit.Mvvm 的 `ObservableObject` 的 ViewModel；其他 MVVM 框架用自己的属性变化通知即可。
+
+```csharp
+private OrderRow? _selectedOrder;
+public OrderRow? SelectedOrder
+{
+    get => _selectedOrder;
+    set => SetProperty(ref _selectedOrder, value);
+}
+
+private int _selectedOrderIndex = -1;
+public int SelectedOrderIndex
+{
+    get => _selectedOrderIndex;
+    set => SetProperty(ref _selectedOrderIndex, value);
+}
+```
+
+- **取整行数据**：在命令里直接读 `SelectedOrder?.OrderNo`、`SelectedOrder?.Customer` 等字段。它就是 `Orders` 中的原对象，未显示的字段也能读到。绑定 `DataTable.DefaultView` 时，选中项类型用 `DataRowView`，例如 `SelectedRow?["订单号"]`。
+- **取行号**：`SelectedIndex` 从 0 开始，按排序、筛选后的显示顺序计算。未选中时为 `-1`，`SelectedItem` 为 `null`。排序后保留仍存在的记录并更新行索引；筛掉选中记录或替换数据源时清空。
+- **从 ViewModel 选中某行**：给 `SelectedOrder` 赋集合里的原对象，或设置 `SelectedOrderIndex`。一次操作任选一个入口。清空时赋 `null` 或 `-1`。
+- **有矩形选区时**：这两个属性返回活动单元格所在行。需要整个矩形时，读 `SelectedRange`。只读表格也可以选中并取得数据。
+
+在窗口后台也可直接读 `Sheet.SelectedIndex` 和 `Sheet.SelectedItem`，例如 `if (Sheet.SelectedItem is OrderRow order) { /* 使用 order */ }`。需要监听时订阅 `Sheet.SelectionChanged`。
+
+### 数据加载后默认选中
+
+从 1.9.93 起，初始化选中的写法与 WPF `DataGrid` 一致。直接在 XAML 设置 `SelectedIndex="0"`，即可在第一行数据可用时选中它。在默认只读模式下，第一行会整行高亮。
+
+```xml
+<sheet:SpreadsheetVisual ItemsSource="{Binding Orders}" SelectedIndex="0" />
+```
+
+使用上面的双向绑定时，把 ViewModel 的 `_selectedOrderIndex` 初始值设为 `0` 即可。要指定某条记录，可提前给绑定的 `SelectedOrder` 赋值，控件会在该对象出现在当前视图时选中它。一次只通过一个属性设置初始选中。异步加载后的选中由控件自动完成。
+
+默认保持未选中，此时控件的 `SelectedIndex` 为 `-1`，`SelectedItem` 为 `null`。初始化选中完成后，再次替换数据源会清除当前选中。
+
+### 获取多个选中项（Ctrl 跳选）
+
+```xml
+<sheet:SpreadsheetVisual ItemsSource="{Binding Orders}" IsReadOnly="True"
+    CanSelectMultipleRows="True" CanUserCopyPaste="True"
+    SelectedItems="{Binding SelectedOrders, Mode=OneWayToSource}" />
+```
+
+```csharp
+// ViewModel；文件开头添加 using System.Collections;
+private IList? _selectedOrders;
+public IList? SelectedOrders
+{
+    get => _selectedOrders;
+    set => SetProperty(ref _selectedOrders, value);
+}
+
+// 业务命令：在 UI 线程取到完整原始对象；后台处理前先取得列表快照。
+var selected = SelectedOrders?.Cast<OrderRow>().ToList();
+```
+
+单击单选，Ctrl＋单击追加／取消，Shift 连选，Ctrl＋Shift 追加一段；Count 有变化通知，可直接绑定 `SelectedOrders.Count`。返回集合只读，不能 Add／Remove／Clear；清空用 `Sheet.ClearSelection()`。排序保持记录身份，集合按新的显示顺序返回；被筛掉或删除的记录移出选区，清除筛选不自动恢复这些记录，替换数据源清空。编辑模式返回被选中格涉及的去重行；准确选区读 `SelectedRanges`，`SelectedRange` 仅是活动连续块。不连续目标拒绝粘贴／填充，先选一个起始格或连续区域即可。详见[Ctrl 多选与选中数据](Ctrl多选与选中数据.md)。
+
+### 读取整个当前视图
+
+```xml
+<sheet:SpreadsheetVisual ItemsSource="{Binding SourceOrders}"
+                         ViewItems="{Binding ViewOrders, Mode=OneWayToSource}" />
+```
+
+```csharp
+using LightExcel.Controls;
+
+// ViewModel 属性。若界面需要跟踪属性赋值，setter 发出 PropertyChanged。
+public SheetViewItems? ViewOrders { get; set; }
+```
+
+`SourceOrders` 是导入和查库写入的源集合。`ViewOrders` 由表格提供，按当前显示顺序读取全部筛选结果，包含屏幕外的行。它是实时只读集合，`Count` 和行列表会随视图通知更新。每条记录仍可转换为业务类型，例如在 UI 线程用 `ViewOrders?.Cast<OrderRow>()`。读取期间如果视图改变，重新开始读取。需要在后台遍历大表时，可以继续使用 `ReadViewAsync<T>` 或 `ViewChangedMethod`。
+
+导出 Excel 或 CSV 时继续调用实际表格的 `ExportAsync()`，这样文件也会使用当前列和多级表头结构。 [导入导出](#7-excel-和-csv-导入导出)
+
+## 10. 列设置与记忆
+
+「列设置」默认隐藏。需要使用此面板时，设置 `CanUserHideColumns="True"` 和 `IsLayoutPersistenceEnabled="True"`。右键叶列表头后，在筛选菜单右上角点击 **列设置**。筛选关闭时，右键直达该面板。取消勾选隐藏列，重新勾选恢复。点击 **应用** 生效。
+
+只需要记住列顺序时，在已有 `x:Name` 的表格上开启 `IsLayoutPersistenceEnabled` 即可。身份由引擎根据应用、页面类型和名称生成。需要保存和恢复用户的列显隐偏好时，再开启 `CanUserHideColumns`。 [列显示设置](列显示设置.md) · [配置文件规则](列顺序记忆.md)
+
+面板底部的“重置列顺序”可以恢复当前代码定义的初始列位置，点击应用后生效并记忆；取消放弃。此操作保留显隐、筛选、数据升降序和行内容。
+
+## 11. 底部汇总行与当前视图通知
+
+给表格加上 `ViewChangedMethod="OnOrdersViewChanged"`，然后在 ViewModel 写一个方法。方法参数 `rows` 是当前筛选结果的全部记录，包含滚动区域外的行。控件默认在后台调用该方法，每次收到新结果时自动更新底部汇总。
+
+```xml
+<sheet:SpreadsheetVisual ItemsSource="{Binding Orders}"
+                         ViewChangedMethod="OnOrdersViewChanged" />
+```
+
+```csharp
+public OrderSummary OnOrdersViewChanged(IReadOnlyList<OrderRow> rows)
+{
+    decimal total = 0;
+    foreach (OrderRow row in rows)
+        total += row.Amount;
+
+    return new OrderSummary(total);
+}
+
+public sealed record OrderSummary(decimal Amount);
+```
+
+百万行等大表一次遍历统计，可把参数改为 `IAsyncEnumerable<OrderRow>`，方法改为 `async Task<OrderSummary>`，循环使用 `await foreach`。引擎每批最多缓冲 2048 个引用，默认仍在后台执行，返回结果自动显示。完整示例见下方的底部汇总说明。
+
+这里由业务计算金额合计，返回对象的 `Amount` 会显示在绑定 `Amount` 的那一列下方。也可以返回数量、平均值、比例或跨表计算结果。有大量记录时，方法可以增加第二个参数 `CancellationToken`，循环里检查取消，让旧计算更快结束。普通滚动、选中和取消编辑草稿不会重新计算。
+
+后台方法收到的是原记录引用，请从方法内只读这些记录。控件自动把返回值发布到 UI 线程，汇总行直接显示 `ViewChangedResult`，可以省略 `SummaryItem`。如果业务已经拿到了数据库或其他服务计算的结果，直接绑定 `SummaryItem="{Binding OrderSummary}"` 即可。显式设置 null 会隐藏汇总行。确实要访问 WPF 控件的旧方法可以设置 `ViewChangedThread="UI"`，耗时计算优先使用默认后台模式。
+
+当前视图有记录且提供了汇总对象时，汇总行才占高度。每列显示由业务填入相应字段，空值留白。汇总行固定在底部，跟随横向滚动、固定列、列宽、显隐和列顺序。完整写法与数据范围见[底部汇总与当前视图通知](底部汇总行.md)。
+
+## 12. 按条件改变整行文字颜色
+
+不需要在窗口后台维护行颜色。给控件配置 RowStyle，绑定的是当前行对象：
+
+```xml
+<sheet:SpreadsheetVisual ItemsSource="{Binding Orders}">
+    <sheet:SpreadsheetVisual.RowStyle>
+        <Style TargetType="DataGridRow">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Priority}" Value="加急">
+                    <Setter Property="Foreground" Value="#FF6B6B" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </sheet:SpreadsheetVisual.RowStyle>
+</sheet:SpreadsheetVisual>
+```
+
+默认不配置即关闭。条件字段通过 INotifyPropertyChanged 通知时自动更新；表格内部编辑、粘贴等写入普通对象也会刷新颜色。表格外部静默修改普通属性没有变化通知，不会被自动侦测；不要为此全量轮询。行样式只支持 Foreground，保持正文绘制结构和可见行复用。选中整行保持原蓝底白字，显式单列颜色优先于行颜色。表头与汇总仍使用原字体配置。更多示例、优先级和性能边界见[条件行字体颜色](条件行字体颜色.md)。
+
+## 13. 一个程序使用多张报表
+
+每张报表像普通 WPF 控件一样绑定自己的数据。筛选、排序、选区、汇总和撤销历史由各控件独立管理。开启列布局记忆时，同一页面里的各表使用不同的 `x:Name`。
+
+```xml
+<Grid>
+    <Grid.RowDefinitions>
+        <RowDefinition />
+        <RowDefinition />
+    </Grid.RowDefinitions>
+    <sheet:SpreadsheetVisual x:Name="OrdersSheet"
+                             ItemsSource="{Binding Orders}"
+                             IsLayoutPersistenceEnabled="True" />
+    <sheet:SpreadsheetVisual x:Name="ReturnsSheet" Grid.Row="1"
+                             ItemsSource="{Binding Returns}"
+                             IsLayoutPersistenceEnabled="True" />
+</Grid>
+```
+
+上例的 `Orders` 和 `Returns` 是 ViewModel 中各自的集合属性。如果两张表绑定同一批原对象，修改对象后，两张表都会收到相应的数据通知，各自按自身的筛选条件和排序规则显示。控件卸载时自动释放自身资源，重新加载后恢复绑定。1.9.61 对 Loaded 后转为 Hidden／Collapsed 或宿主最小化的表，在 Dispatcher 空闲时自动释放绘图场景、文字／字形缓存和可选查询缓存；再次显示时按当前数据重画。各页的源集合、已提交筛选／排序和选区继续由各自实例持有。快速返回时尚未执行的清理会取消。
+
+**1.9.60 实测。** 50 张空表增加约 3.3 MiB 托管内存。50 张独立报表各 3,000 行、20 列，同时显示时，回收后的控件和绑定额外占用约 8.3 MiB，业务记录另占约 24.5 MiB。开启筛选、排序和汇总后，每秒同时增删改，共验证 120 批，关窗后全部回收。该旧短测负载每批进程累计分配的中位数约为 99 MiB。1.9.62 已补做 50 个常驻页面、55 个控件各 2,000 行×20 列的 30 分钟持续增删改、筛选、排序及汇总核对，后台绘图残留为零，释放后预约归零。此场景每批包含全量正确性核对和汇总等待，仍有 21/1777 批超过 1 秒；没有把它作为每秒完成或显示器流畅度保证。两种内存计量及适用边界见[多表复用与撤销共享预算](多表复用与撤销共享预算.md)。
+
+
+1.9.62 修复了隐藏页面在筛选提交／重新接入数据后取消缓存清理的问题。正式示例与保护包已经同步更新；详见多表复用说明。
