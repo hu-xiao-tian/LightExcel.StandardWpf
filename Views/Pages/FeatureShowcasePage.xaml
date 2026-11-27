@@ -7,62 +7,98 @@
         <Style TargetType="Button" BasedOn="{StaticResource LightExcel.ButtonStyle}" />
     </UserControl.Resources>
     <DockPanel>
-        <!-- 顶部实时演示开关 -->
-        <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
-            <Button Style="{DynamicResource LightExcel.PrimaryButtonStyle}" Content="新增一行" Click="AddRow_Click" Padding="12,5" Margin="0,0,8,4" />
-            <Button Content="删除末行" Click="RemoveLast_Click" Padding="10,5" Margin="0,0,14,4" />
-            <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="允许选中" IsChecked="{Binding IsSelectionEnabled, ElementName=ShowcaseSheet, Mode=TwoWay}" ToolTip="关闭后点击数据行不产生蓝色高亮，但格内按钮、开关、勾选框与自定义右键菜单仍可正常操作。" VerticalAlignment="Center" Margin="0,0,12,4" />
-            <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="只读模式" IsChecked="{Binding IsReadOnly, ElementName=ShowcaseSheet, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,4" />
-            <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="复制粘贴" IsChecked="{Binding CanUserCopyPaste, ElementName=ShowcaseSheet, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,4" />
-            <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="筛选" IsChecked="{Binding CanUserFilterColumns, ElementName=ShowcaseSheet, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,4" />
-            <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="显示行号" IsChecked="{Binding ShowRowNumbers, ElementName=ShowcaseSheet, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,4" />
-            <CheckBox x:Name="ThemeCheck" Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="浅色主题" Checked="ThemeCheck_Changed" Unchecked="ThemeCheck_Changed" VerticalAlignment="Center" Margin="0,0,12,4" />
-        </WrapPanel>
+        <!-- 顶部纯 MVVM 实时演示开关栏 -->
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <WrapPanel Orientation="Horizontal" Margin="0,0,0,6">
+                <Button Style="{DynamicResource LightExcel.PrimaryButtonStyle}" Content="新增一行" Command="{Binding AddRowCommand}" Padding="12,5" Margin="0,0,8,4" />
+                <Button Content="删除末行" Command="{Binding RemoveLastCommand}" Padding="10,5" Margin="0,0,14,4" />
+                <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="允许选中" IsChecked="{Binding IsSelectionEnabled, Mode=TwoWay}" ToolTip="关闭后点击数据行不产生蓝色高亮，但格内按钮、开关、勾选框、下拉、日期与自定义右键菜单仍可正常操作。" VerticalAlignment="Center" Margin="0,0,12,4" />
+                <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="只读模式" IsChecked="{Binding IsReadOnly, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,4" />
+                <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="复制粘贴" IsChecked="{Binding CanUserCopyPaste, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,4" />
+                <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="筛选" IsChecked="{Binding CanUserFilterColumns, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,4" />
+                <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="显示行号" IsChecked="{Binding ShowRowNumbers, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,4" />
+                <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="浅色主题" IsChecked="{Binding IsLightTheme, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,4" />
+            </WrapPanel>
+            <WrapPanel Orientation="Horizontal">
+                <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="自动合并同值列(含控件列)" IsChecked="{Binding IsAutoMergeEnabled, Mode=TwoWay}" ToolTip="开启后：类别、纸宽、班次(下拉)、排产日期(日历)、审核(勾选框)、启用(开关)相邻同值自动合并；操作按钮列无值自动跳过。" VerticalAlignment="Center" Margin="0,0,12,4" />
+                <CheckBox Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="允许手动合并" IsChecked="{Binding IsManualMergeEnabled, Mode=TwoWay}" ToolTip="开启允许选中并拖选同列多格后可右键手动合并；跨不同控件列拖选时「合并单元格」会自动置灰拦截。" VerticalAlignment="Center" Margin="0,0,14,4" />
+                <Button Content="代码合并·米数求和" Command="{Binding ApplyComputedMergeCommand}" CommandParameter="{Binding ElementName=ShowcaseSheet}" Padding="10,4" Margin="0,0,8,4" />
+                <Button Content="控件列分组合并" Command="{Binding ApplyWidgetMergeCommand}" CommandParameter="{Binding ElementName=ShowcaseSheet}" Padding="10,4" Margin="0,0,8,4" />
+                <Button Content="二维 Grid 合并" Command="{Binding ApplyGridMergeCommand}" CommandParameter="{Binding ElementName=ShowcaseSheet}" Padding="10,4" Margin="0,0,8,4" />
+                <Button Content="清除合并" Command="{Binding ClearMergeCommand}" CommandParameter="{Binding ElementName=ShowcaseSheet}" Padding="10,4" Margin="0,0,8,4" />
+            </WrapPanel>
+        </StackPanel>
 
-        <!-- 底部交互反馈栏 -->
+        <!-- 底部交互反馈栏（纯 Binding） -->
         <Border DockPanel.Dock="Bottom" Margin="0,10,0,0" Padding="12,8" CornerRadius="8"
                 Background="#10FFFFFF" BorderBrush="{DynamicResource LightExcel.Border}" BorderThickness="1">
-            <TextBlock x:Name="ActionLog" Foreground="{DynamicResource LightExcel.Text}" TextWrapping="Wrap"
-                       Text="提示：本页所有列采用星号比例宽度（* / 100*）随窗口自动伸缩且无多余横向滚动条；当前默认关闭行选中高亮（IsSelectionEnabled=False），可直接点击格内按钮/开关/勾选框/下拉/日期，或右键打开自动跟随主题的标准菜单。" />
+            <TextBlock Foreground="{DynamicResource LightExcel.Text}" TextWrapping="Wrap" Text="{Binding ActionLog}" />
         </Border>
 
-        <!-- 星号列宽 + 全套零开销格内控件演示表 -->
+        <!-- 星号列宽 + 全套零开销格内控件 + 合并演示表（零后台事件） -->
         <Border Background="{DynamicResource LightExcel.Surface}" BorderBrush="{DynamicResource LightExcel.Border}" BorderThickness="1" CornerRadius="10" Padding="1">
             <sheet:SpreadsheetVisual x:Name="ShowcaseSheet"
-                                     IsReadOnly="False"
-                                     IsSelectionEnabled="False"
+                                     ItemsSource="{Binding Batches}"
+                                     SummaryItem="{Binding SummaryItem}"
+                                     Theme="{Binding Theme}"
+                                     IsReadOnly="{Binding IsReadOnly}"
+                                     IsSelectionEnabled="{Binding IsSelectionEnabled}"
                                      CanUserSortColumns="True"
-                                     CanUserFilterColumns="True"
-                                     CanUserCopyPaste="False"
+                                     CanUserFilterColumns="{Binding CanUserFilterColumns}"
+                                     CanUserCopyPaste="{Binding CanUserCopyPaste}"
+                                     ShowRowNumbers="{Binding ShowRowNumbers}"
+                                     IsAutoMergeEnabled="{Binding IsAutoMergeEnabled}"
+                                     IsManualMergeEnabled="{Binding IsManualMergeEnabled}"
+                                     CanUserMergeCells="True"
+                                     MergeKeyPath="Serial"
                                      CornerRadius="9"
                                      RowHeight="34"
-                                     ColumnHeaderHeight="36"
-                                     CellButtonClicked="ShowcaseSheet_CellButtonClicked">
+                                     ColumnHeaderHeight="36">
                 <sheet:SpreadsheetVisual.RowContextMenu>
                     <ContextMenu>
-                        <MenuItem Header="预览排程卡" Click="RowMenu_Preview_Click" />
-                        <MenuItem Header="快速补米 +100m" Click="RowMenu_AddMeters_Click" />
+                        <MenuItem Header="预览排程卡"
+                                  Command="{Binding PreviewRowCommand}"
+                                  CommandParameter="{Binding PlacementTarget.RightClickedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                        <MenuItem Header="快速补米 +100m"
+                                  Command="{Binding AddMetersCommand}"
+                                  CommandParameter="{Binding PlacementTarget.RightClickedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                         <Separator />
-                        <MenuItem Header="删除此行" Click="RowMenu_Delete_Click" />
+                        <MenuItem Header="删除此行"
+                                  Command="{Binding DeleteRowCommand}"
+                                  CommandParameter="{Binding PlacementTarget.RightClickedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                     </ContextMenu>
                 </sheet:SpreadsheetVisual.RowContextMenu>
 
                 <sheet:SpreadsheetVisual.Columns>
-                    <sheet:SheetTextColumn Width="65*" Header="序号" Binding="{Binding Serial}" IsReadOnly="True" HorizontalContentAlignment="Center" />
-                    <sheet:SheetTextColumn Width="80*" Header="类别" Binding="{Binding FluteCode}" HorizontalContentAlignment="Center" />
-                    <sheet:SheetTextColumn Width="140*" Header="纸质" Binding="{Binding PaperCode}" />
-                    <sheet:SheetTextColumn Width="95*" Header="纸宽(mm)" Binding="{Binding WidthMm}" HorizontalContentAlignment="Right" />
-                    <sheet:SheetTextColumn Width="90*" Header="米数(m)" Binding="{Binding Meters}" HorizontalContentAlignment="Right" />
-                    <sheet:SheetComboBoxColumn Width="110*" Header="班次" SelectedItemBinding="{Binding Shift}" ItemsSource="{Binding ShiftOptions}" />
-                    <sheet:SheetDatePickerColumn Width="125*" Header="排产日期" Binding="{Binding PlanDate}" />
-                    <sheet:SheetCheckBoxColumn Width="75*" Header="审核" Binding="{Binding IsApproved}" AccentColor="#38BDF8" />
-                    <sheet:SheetToggleSwitchColumn Width="95*" Header="启用" Binding="{Binding IsEnabled}" OnText="开" OffText="关" AccentColor="#22C55E" />
-                    <sheet:SheetProgressBarColumn Width="125*" Header="完工进度" Binding="{Binding Progress}" AccentColor="#38BDF8" />
-                    <sheet:SheetTemplateColumn Width="145*" Header="操作">
+                    <sheet:SheetTextColumn Width="60*" Header="序号" Binding="{Binding Serial}" IsReadOnly="True" HorizontalContentAlignment="Center" />
+                    <sheet:SheetTextColumn Width="78*" Header="类别" Binding="{Binding FluteCode}" MergePolicy="Always" HorizontalContentAlignment="Center" />
+                    <sheet:SheetTextColumn Width="135*" Header="纸质" Binding="{Binding PaperCode}" />
+                    <sheet:SheetTextColumn Width="105*" Header="纸宽(mm)" Binding="{Binding WidthMm}" MergePolicy="Always" HorizontalContentAlignment="Right" />
+                    <sheet:SheetTextColumn Width="105*" Header="米数(m)" Binding="{Binding Meters}" HorizontalContentAlignment="Right" />
+
+                    <sheet:SheetComboBoxColumn Width="105*" Header="班次" SelectedItemBinding="{Binding Shift}" ItemsSource="{Binding ShiftOptions}" MergePolicy="Always" />
+                    <sheet:SheetDatePickerColumn Width="125*" Header="排产日期" Binding="{Binding PlanDate}" VerticalContentAlignment="Center" HeaderVerticalContentAlignment="Center" MergePolicy="Always" />
+                    <sheet:SheetCheckBoxColumn Width="72*" Header="审核" Binding="{Binding IsApproved}" AccentColor="#38BDF8" MergePolicy="Always" />
+                    <sheet:SheetToggleSwitchColumn Width="90*" Header="启用" Binding="{Binding IsEnabled}" OnText="开" OffText="关" AccentColor="#22C55E" MergePolicy="Always" />
+                    <sheet:SheetProgressBarColumn Width="120*" Header="完工进度" Binding="{Binding Progress}" AccentColor="#38BDF8" />
+                    <sheet:SheetImageColumn Width="82*" Header="缩略图"
+                        Source="/Views/Pages/11ee2549-68e6-4e41-bd10-fbe8a1e422e7.png"
+                        CornerRadius="4" Stretch="Uniform" />
+                    <sheet:SheetButtonColumn Width="78*" Header="快捷按钮" Content="加急"
+                        ButtonStyle="Primary" CornerRadius="6"
+                        Command="{Binding RushBatchCommand}" />
+                    <sheet:SheetTemplateColumn Width="155*" Header="自定义模板" UseNativeTemplate="True">
                         <DataTemplate>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                <Button Content="加急" Tag="Rush" Margin="0,0,6,0" />
-                                <Button Content="详情" Tag="Detail" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Border Background="#1A38BDF8" BorderBrush="#6638BDF8" BorderThickness="1" CornerRadius="8" Padding="6,1" Margin="0,0,6,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding FluteCode}" Foreground="#7DD3FC" FontSize="10.5" FontWeight="SemiBold" />
+                                </Border>
+                                <Button Content="加急" Padding="8,2" MinHeight="22" FontSize="11" Margin="0,0,5,0"
+                                        Command="{Binding DataContext.RushBatchCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}" />
+                                <Button Content="详情" Padding="8,2" MinHeight="22" FontSize="11"
+                                        Command="{Binding DataContext.InspectBatchCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}" />
                             </StackPanel>
                         </DataTemplate>
                     </sheet:SheetTemplateColumn>

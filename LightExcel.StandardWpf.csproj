@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -11,9 +11,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Views\Pages\11ee2549-68e6-4e41-bd10-fbe8a1e422e7.png" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="LightExcel.DataExchange" Version="3.1.11" />
+    <PackageReference Include="LightExcel.DataExchange" Version="3.1.17" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Views\Pages\11ee2549-68e6-4e41-bd10-fbe8a1e422e7.png" />
   </ItemGroup>
 
   <ItemGroup>

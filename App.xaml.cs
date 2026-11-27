@@ -68,8 +68,9 @@ public partial class App : Application
         var lruViewModel = new LruPagingPageViewModel();
         shell.AddPage(new LruPagingPage(lruViewModel));
 
-        // 星号列宽 + 格内控件 + 禁止选中 + 标准右键菜单综合演示页
-        shell.AddPage(new FeatureShowcasePage());
+        // 星号列宽 + 格内控件 + 禁止选中 + 合并 + 标准右键菜单综合演示页（纯 MVVM）
+        var showcaseViewModel = new FeatureShowcasePageViewModel();
+        shell.AddPage(new FeatureShowcasePage(showcaseViewModel));
 
         // 空白模板页：演示接入方式，正式页面做好后可以删掉这一行
         shell.AddPage(new PlaceholderPage());

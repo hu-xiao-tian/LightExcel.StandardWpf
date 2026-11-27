@@ -52,6 +52,16 @@ public partial class OrdersPage : UserControl, ITestPage
         _sourceDescriptor.AddValueChanged(Sheet, OnItemsSourceChanged);
         Sheet.Engine.ColumnOperationFailed += ShowQueryError;
         Sheet.FilterFailed += ShowQueryError;
+        Sheet.CellsMerging += OnCellsMerging;
+    }
+
+    private void OnCellsMerging(object? sender, SheetCellsMergingEventArgs e)
+    {
+        if (BlockCrossTypeMergeToggle.IsChecked == true && e.HasMixedColumnTypes)
+        {
+            e.Cancel = true;
+            e.Reason = "已开启「禁止跨类型合并」（CellsMerging 钩子）：不允许将不同数据类型的列合并。";
+        }
     }
 
     public string Title { get; }
@@ -164,6 +174,7 @@ public partial class OrdersPage : UserControl, ITestPage
         _sourceDescriptor.RemoveValueChanged(Sheet, OnItemsSourceChanged);
         Sheet.Engine.ColumnOperationFailed -= ShowQueryError;
         Sheet.FilterFailed -= ShowQueryError;
+        Sheet.CellsMerging -= OnCellsMerging;
 
         (DataContext as OrdersPageViewModel)?.Dispose();
     }

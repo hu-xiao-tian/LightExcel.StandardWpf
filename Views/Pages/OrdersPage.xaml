@@ -65,6 +65,8 @@
             <CheckBox x:Name="ManualMergeToggle" Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="允许手动合并"
                       IsChecked="{Binding IsManualMergeEnabled, ElementName=Sheet, Mode=TwoWay}"
                       ToolTip="取消只读后在单元格模式下框选，通过右键菜单合并/取消合并。" VerticalAlignment="Center" Margin="0,0,12,4" />
+            <CheckBox x:Name="BlockCrossTypeMergeToggle" Style="{DynamicResource LightExcel.CheckBoxStyle}" Content="禁止跨类型合并"
+                      ToolTip="演示 CellsMerging 自定义校验钩子：勾选后跨不同字段类型（如客户编码 string + 交货日期 DateTime）时右键「合并单元格」将自动置灰拦截。" VerticalAlignment="Center" Margin="0,0,12,4" />
             <Button Content="代码合并·求和" Click="ApplyComputedMerge_Click"
                     ToolTip="按同客户自动合并并实时显示展开长合计（Sum）与订单条数（Compute），不改底层明细。"
                     Padding="10,5" Margin="0,0,8,4" />

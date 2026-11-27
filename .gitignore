@@ -7,5 +7,5 @@
 /data/*
 
 /packages/*
-!/packages/LightExcel.Core.3.1.11.nupkg
-!/packages/LightExcel.DataExchange.3.1.11.nupkg
+!/packages/LightExcel.Core.3.1.17.nupkg
+!/packages/LightExcel.DataExchange.3.1.17.nupkg
