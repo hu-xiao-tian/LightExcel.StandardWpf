@@ -1,6 +1,9 @@
 # LightExcel.StandardWpf
 
-`LightExcel.StandardWpf` 是 `LightExcel.DataExchange` NuGet 包的 WPF 演示项目。该包为 LightExcel 提供流式 XLSX 和 CSV 导入导出，并自动引入 `LightExcel.Core` 表格控件。[查看 NuGet 包](https://www.nuget.org/packages/LightExcel.DataExchange/)
+`LightExcel.StandardWpf` 是 `LightExcel.Core` 和 `LightExcel.DataExchange` 两个 NuGet 包的 WPF 演示项目。
+
+- `LightExcel.Core` 提供 `SpreadsheetVisual` 表格控件，以及多级表头、排序、筛选和分页等功能。[NuGet 包](https://www.nuget.org/packages/LightExcel.Core/)
+- `LightExcel.DataExchange` 提供流式 XLSX 和 CSV 导入导出，支持导出当前视图或全部源数据，以及在 XLSX 中保留多级表头和单元格合并。[NuGet 包](https://www.nuget.org/packages/LightExcel.DataExchange/)
 
 ## 演示内容
 
