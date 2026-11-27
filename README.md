@@ -1,6 +1,12 @@
 # LightExcel.StandardWpf
 
-LightExcel 的 WPF 示例项目。项目使用 MVVM 将 SQLite 中的模拟订单绑定到表格，演示多级表头、排序与筛选、分页加载和 Excel 导入导出。
+`LightExcel.StandardWpf` 是 `LightExcel.DataExchange` NuGet 包的 WPF 演示项目。该包为 LightExcel 提供流式 XLSX 和 CSV 导入导出，并自动引入 `LightExcel.Core` 表格控件。[查看 NuGet 包](https://www.nuget.org/packages/LightExcel.DataExchange/)
+
+## 演示内容
+
+- 使用 MVVM 将 SQLite 模拟订单绑定到 `SpreadsheetVisual`，体验多级表头、排序、筛选和分页。
+- 从 Excel 导入订单，导出当前筛选和排序后的视图，或导出全部源数据。
+- 将合并视图导出为 XLSX，保留多级表头和数据区合并。
 
 ## 快速开始
 
