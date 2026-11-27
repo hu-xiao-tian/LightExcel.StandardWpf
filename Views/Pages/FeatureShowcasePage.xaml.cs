@@ -56,12 +56,25 @@ public partial class FeatureShowcasePage : UserControl, ITestPage
         Batches.Add(new PaperBatchItem { Serial = 5, FluteCode = "BE", PaperCode = "K/7/3/7/K", WidthMm = 2500, Meters = 520, Shift = "中班", PlanDate = new DateTime(2026, 11, 29), IsApproved = true, IsEnabled = true, Progress = 25 });
 
         ShowcaseSheet.ItemsSource = Batches;
+        Batches.CollectionChanged += (_, _) => UpdateSummary();
+        UpdateSummary();
+    }
+
+    private void UpdateSummary()
+    {
+        if (Batches.Count == 0)
+        {
+            ShowcaseSheet.SummaryItem = null;
+            return;
+        }
+        int totalMeters = Batches.Sum(x => x.Meters);
+        double avgProgress = Batches.Average(x => x.Progress);
         ShowcaseSheet.SummaryItem = new
         {
             Serial = "合计",
-            FluteCode = "5 批",
-            Meters = "2,355 m",
-            Progress = 62.4
+            FluteCode = $"{Batches.Count} 批",
+            Meters = $"{totalMeters:N0} m",
+            Progress = Math.Round(avgProgress, 1)
         };
     }
 
@@ -104,6 +117,7 @@ public partial class FeatureShowcasePage : UserControl, ITestPage
         if (e.ButtonKey == "Rush")
         {
             batch.Progress = Math.Min(100, batch.Progress + 15);
+            UpdateSummary();
             ActionLog.Text = $"[格内按钮] 已对序号 {batch.Serial}（{batch.PaperCode}）执行「加急」→ 进度更新为 {batch.Progress:0}%。";
         }
         else
@@ -123,6 +137,7 @@ public partial class FeatureShowcasePage : UserControl, ITestPage
         if (ShowcaseSheet.RightClickedItem is PaperBatchItem batch)
         {
             batch.Meters += 100;
+            UpdateSummary();
             ActionLog.Text = $"[行右键菜单] 序号 {batch.Serial} 已快速补米 +100m → 当前 {batch.Meters}m";
         }
     }

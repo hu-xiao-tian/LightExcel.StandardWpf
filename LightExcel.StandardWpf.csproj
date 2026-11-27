@@ -12,7 +12,7 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="LightExcel.DataExchange" Version="3.1.9" />
+    <PackageReference Include="LightExcel.DataExchange" Version="3.1.11" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
   </ItemGroup>
 
